@@ -1,0 +1,55 @@
+{
+  "id": "ai-services",
+  "realm": "ai-services",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "mcp_viewer",
+        "description": "Read-only database schema inspection privileges"
+      },
+      {
+        "name": "mcp_analyst_readonly",
+        "description": "Read-only parameterized SELECT query privileges"
+      },
+      {
+        "name": "mcp_operator_write",
+        "description": "Controlled table insert and update DML privileges"
+      },
+      {
+        "name": "mcp_dba_admin",
+        "description": "Administrative role (strictly prohibited for automated LLM agents)"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "ai-orchestrator-gateway",
+      "name": "AI Orchestration Gateway",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "ai_gateway_client_secret_123",
+      "redirectUris": [
+        "http://localhost:8000/auth/callback"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ]
+    }
+  ]
+}

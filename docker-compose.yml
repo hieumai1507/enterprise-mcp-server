@@ -1,0 +1,68 @@
+version: "3.9"
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: enterprise-mcp-keycloak
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin_password
+    volumes:
+      - ./config/keycloak-realm-export.json:/opt/keycloak/data/import/realm.json:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080; echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3; cat <&3 | grep -q '200 OK'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: enterprise-mcp-postgres
+    environment:
+      POSTGRES_DB: enterprise_db
+      POSTGRES_USER: postgres_admin
+      POSTGRES_PASSWORD: admin_master_password
+    volumes:
+      - ./deploy/scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_admin -d enterprise_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: enterprise-mcp-server
+    environment:
+      ENVIRONMENT: development
+      OIDC_ISSUER: http://keycloak:8080/realms/ai-services
+      OIDC_AUDIENCE: mcp-postgres-server
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: enterprise_db
+      DB_USER_RO: mcp_ro_service
+      DB_PASSWORD_RO: ro_service_secret
+      DB_USER_RW: mcp_rw_service
+      DB_PASSWORD_RW: rw_service_secret
+      DB_USER_AUDIT: mcp_audit_writer
+      DB_PASSWORD_AUDIT: audit_service_secret
+      JEV_ENABLED: "true"
+      JEV_RISK_THRESHOLD: "0.70"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+volumes:
+  pgdata:
