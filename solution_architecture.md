@@ -45,16 +45,16 @@ flowchart TD
         AuditDB[("Audit Schema: mcp_audit<br/>Owner: mcp_audit_writer (INSERT ONLY)")]
     end
 
-    Agent -->|1. PKCE Auth| IdP
-    Agent -->|2. MCP Request + Bearer JWT| PEP
-    PEP -->|3. Cryptographic Validation| RBAC
-    RBAC -->|4a. Deny (403)| AuditWorker
-    RBAC -->|4b. Pass| JEV
-    JEV -->|5a. Malicious Intent (Score >= 0.70)| AuditWorker
-    JEV -->|5b. Safe Query| Parser
-    Parser -->|6. Safe AST Execution| PoolRO
-    Parser -->|6. Scoped Mutation| PoolRW
-    AuditWorker -->|7. Non-blocking Flush| AuditDB
+    Agent -->|"1. PKCE Auth"| IdP
+    Agent -->|"2. MCP Request + Bearer JWT"| PEP
+    PEP -->|"3. Cryptographic Validation"| RBAC
+    RBAC -->|"4a. Deny (403)"| AuditWorker
+    RBAC -->|"4b. Pass"| JEV
+    JEV -->|"5a. Malicious Intent (Score >= 0.70)"| AuditWorker
+    JEV -->|"5b. Safe Query"| Parser
+    Parser -->|"6. Safe AST Execution"| PoolRO
+    Parser -->|"6. Scoped Mutation"| PoolRW
+    AuditWorker -->|"7. Non-blocking Flush"| AuditDB
 ```
 
 ---
