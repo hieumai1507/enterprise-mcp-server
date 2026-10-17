@@ -263,9 +263,9 @@ async def main():
     print("✓ Side-channel timing attack blocked by TypeSafe AI JEV Guardrail!")
 
     # -------------------------------------------------------------------------
-    # REQUIREMENT 5: Live Comprehensive Audit Logging in PostgreSQL
+    # REQUIREMENT 5: Live Comprehensive Audit Logging in PostgreSQL & SQLite WAL
     # -------------------------------------------------------------------------
-    print_step(4, "Forensic Audit Trail Verification (Live PostgreSQL mcp_audit Schema)")
+    print_step(4, "Forensic Audit Trail Verification (Live PostgreSQL mcp_audit Schema & SQLite WAL)")
     print("• Waiting 0.5s for async audit buffer to persist queued events into PostgreSQL...")
     await asyncio.sleep(0.5)
 
@@ -311,11 +311,74 @@ async def main():
         print(f"✓ PostgreSQL Engine Denied Deletion: {str(del_err).strip()}")
         print("✓ Audit trail is strictly immutable and append-only!")
 
+    # -------------------------------------------------------------------------
+    # REQUIREMENT 6: Query Governor & Limit Injection (Anti-OOM & Denylist)
+    # -------------------------------------------------------------------------
+    print_step(5, "Query Governor & Table Denylist Hardening")
+    print("• Testing automatic LIMIT 100 injection on unbounded SELECT query...")
+    unbounded_res = await mcp_server.execute_tool(
+        tool_name="read_query",
+        arguments={"query": "SELECT id, full_name FROM users", "parameters": []},
+        context=ctx_analyst,
+        session_id="live-session-governor"
+    )
+    assert unbounded_res["isError"] is False
+    print(f"✓ Unbounded query governed and executed safely (Rows returned: {len(unbounded_res['data'])})")
+
+    print("\n• Testing Table Denylist: Attempting query on restricted 'salaries' table...")
+    denied_res = await mcp_server.execute_tool(
+        tool_name="read_query",
+        arguments={"query": "SELECT * FROM salaries", "parameters": []},
+        context=ctx_analyst,
+        session_id="live-session-denied-table"
+    )
+    assert denied_res["isError"] is True
+    print(f"✓ Table Denylist Blocked Access: {denied_res['content'][0]['text']}")
+
+    # -------------------------------------------------------------------------
+    # REQUIREMENT 7: MCP Resources (postgres://schema/summary)
+    # -------------------------------------------------------------------------
+    print_step(6, "MCP Resource URI Discovery (postgres://schema/summary)")
+    resources = mcp_server.list_resources(ctx_analyst)
+    print(f"• Discovered MCP Resources: {[r['uri'] for r in resources]}")
+    assert any(r["uri"] == "postgres://schema/summary" for r in resources)
+
+    schema_summary = await mcp_server.read_resource("postgres://schema/summary", ctx_analyst)
+    print("• Successfully retrieved single-call schema markdown summary:")
+    print("------------------------------------------------------------------")
+    print(schema_summary["text"].strip()[:400] + "\n... [truncated]")
+    print("------------------------------------------------------------------")
+    print("✓ MCP Resource provides complete database context in 1 network call!")
+
+    # -------------------------------------------------------------------------
+    # REQUIREMENT 8: RFC 7662 Token Revocation Registry
+    # -------------------------------------------------------------------------
+    print_step(7, "Token Revocation Registry (RFC 7009 / RFC 7662)")
+    revoked_token = create_agent_token(
+        sub="agent-compromised",
+        client_id="rogue-client",
+        scopes="mcp:tools:read",
+        roles=["mcp_analyst_readonly"]
+    )
+    revoked_claims = jwt.decode(revoked_token, options={"verify_signature": False})
+    revoked_jti = revoked_claims["jti"]
+
+    # Revoke JTI
+    oauth2_manager.revoke_token(revoked_jti)
+    print(f"• Revoked token with JTI: {revoked_jti}")
+
+    try:
+        await oauth2_manager.verify_token(revoked_token)
+        print("ERROR: Revoked token was accepted!")
+        assert False
+    except Exception as rev_err:
+        print(f"✓ Revoked token immediately rejected by security manager: {rev_err}")
+
     # Graceful shutdown
     await audit_buffer.stop()
     await db_manager.close()
 
-    print_header("ALL 5 ENTERPRISE SECURITY & BUSINESS REQUIREMENTS FULLY VERIFIED ON LIVE POSTGRESQL 17!")
+    print_header("ALL 8 ENTERPRISE SECURITY, GOVERNANCE & PROTOCOL REQUIREMENTS FULLY VERIFIED ON LIVE POSTGRESQL 17!")
 
 
 if __name__ == "__main__":

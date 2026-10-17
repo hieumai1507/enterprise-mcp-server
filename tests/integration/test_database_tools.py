@@ -111,3 +111,32 @@ async def test_update_record_rejects_audit_tampering(operator_context):
     assert res["isError"] is True
     assert res["errorCode"] == "DATABASE_SECURITY_ERROR"
     assert "audit table" in res["content"][0]["text"].lower()
+
+
+def test_query_governor_injects_limit():
+    from src.db.query_builder import enforce_query_governor
+    governed = enforce_query_governor("SELECT id, full_name FROM users WHERE department = 'Engineering'")
+    assert "LIMIT" in governed
+    assert "100" in governed
+
+    # If query already has limit, preserve it
+    governed_custom = enforce_query_governor("SELECT id FROM users LIMIT 25")
+    assert "LIMIT 25" in governed_custom
+    assert "LIMIT 100" not in governed_custom
+
+
+def test_query_governor_blocks_denied_tables():
+    from src.db.query_builder import validate_read_only_sql
+    denied_queries = [
+        "SELECT * FROM salaries",
+        "SELECT * FROM credentials",
+        "SELECT * FROM api_keys",
+        "SELECT * FROM system_secrets",
+        "SELECT * FROM pg_shadow"
+    ]
+    for q in denied_queries:
+        with pytest.raises(DatabaseSecurityError) as exc:
+            validate_read_only_sql(q)
+        assert "Access to" in str(exc.value) or "restricted" in str(exc.value) or "prohibited" in str(exc.value)
+
+

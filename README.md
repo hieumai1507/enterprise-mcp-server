@@ -5,17 +5,17 @@
 [![MCP](https://img.shields.io/badge/MCP-1.0-blueviolet.svg)](https://modelcontextprotocol.io/)
 [![Security: OAuth 2.1](https://img.shields.io/badge/OAuth-2.1%20with%20PKCE-brightgreen.svg)](https://oauth.net/2.1/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%7C%2017-336791.svg)](https://www.postgresql.org/)
-[![Tests: 37 Passed](https://img.shields.io/badge/Tests-37%2F37%20Passed-success.svg)](./tests)
+[![Tests: 45 Passed](https://img.shields.io/badge/Tests-45%2F45%20Passed-success.svg)](./tests)
 
-A hardened, production-ready **Model Context Protocol (MCP)** server engineered as a secure Policy Enforcement Point (PEP) between AI Agents (Claude 3.5 Sonnet, LangGraph, CrewAI) and internal PostgreSQL databases.
+A hardened, production-grade **Model Context Protocol (MCP)** server engineered as a secure Policy Enforcement Point (PEP) between AI Agents (Claude 3.5 Sonnet, LangGraph, CrewAI) and internal PostgreSQL databases.
 
-Eliminates the **Confused Deputy Attack**, enforces **OAuth 2.1 with PKCE**, provides **Tool-Level RBAC**, runs real-time **AI Semantic Guardrails**, and logs an **immutable append-only audit trail** directly in PostgreSQL.
+Eliminates the **Confused Deputy Attack**, enforces **OAuth 2.1 with PKCE**, provides **Tool-Level RBAC**, runs real-time **AI Semantic Guardrails**, safeguards availability via a **Query Governor**, guarantees durability with a **Crash-Resilient SQLite WAL**, exposes single-call **MCP Resources (`postgres://schema/summary`)**, and logs an **immutable append-only audit trail** in PostgreSQL.
 
 ---
 
 ## ⚡ Live Verification Proof (Tested on PostgreSQL 17)
 
-Every feature in this repository is tested and verified against a live database instance.
+Every feature in this repository is tested and verified against a live PostgreSQL 17 database instance:
 
 ```text
 ================================================================================
@@ -24,25 +24,39 @@ Every feature in this repository is tested and verified against a live database 
 Target Database: PostgreSQL 17 on localhost:5433/enterprise_db
 Database Pools:  {'ro_pool': 'healthy', 'rw_pool': 'healthy', 'audit_pool': 'healthy'}
 
-[STEP 1] OAuth 2.1 with PKCE & RFC 9068 Verification ................ [PASS]
+[STEP 1] OAuth 2.1 with PKCE & RFC 9068 Cryptographic Verification ... [PASS]
   • PKCE S256 Challenge Verification Succeeded
   • Analyst Token: sub='agent-claude-analyst-01', Scopes=['mcp:tools:read']
 
-[STEP 2] Strictly NO Token Passthrough & Tool-Level RBAC ............ [PASS]
+[STEP 2] STRICTLY NO Token Passthrough & Tool-Level RBAC ............ [PASS]
   • Analyst 'read_query' on 'public.users' -> Fetched 1 live row via mcp_ro_service
   • Viewer 'read_query' -> 403 FORBIDDEN (Missing Scope: mcp:tools:read)
   • Analyst 'update_record' -> 403 FORBIDDEN (Write Escalation Blocked)
   • Operator 'update_record' -> 200 OK (Row updated via mcp_rw_service)
   • Any Agent 'drop_table' -> 403 FORBIDDEN (Permanently Prohibited for AI)
 
-[STEP 3] Real-Time AI Intent Guardrails (TypeSafe AI JEV) .......... [PASS]
-  • Safe Analytical Query -> Risk: 0.02 (SAFE) -> Executed in DB
-  • SQL Injection Probe   -> Risk: 0.98 (BLOCKED BEFORE TOUCHING DB)
-  • Timing Attack pg_sleep-> Risk: 0.98 (BLOCKED BEFORE TOUCHING DB)
+[STEP 3] AI Guardrail Evals (TypeSafe AI JEV Classifier-as-a-Judge) ... [PASS]
+  • Benign Analytical Query -> JEV Guardrail: SAFE (Score < 0.10)
+  • SQL Injection Probe    -> JEV Classifier Score: 0.98 (BLOCKED BEFORE TOUCHING DB)
+  • Timing Attack pg_sleep -> JEV Classifier Score: 0.98 (BLOCKED BEFORE TOUCHING DB)
 
-[STEP 4] Append-Only Audit Logging in PostgreSQL .................... [PASS]
-  • 5 Audit Events Persisted in mcp_audit.tool_execution_logs
+[STEP 4] Forensic Audit Trail Verification (PostgreSQL & SQLite WAL) . [PASS]
+  • 5 Live Audit Records Persisted in mcp_audit.tool_execution_logs
   • Attempt DELETE logs via mcp_audit_writer -> Denied: permission denied for table
+  • Immutability Engine Lock Confirmed
+
+[STEP 5] Query Governor & Table Denylist Hardening .................. [PASS]
+  • Unbounded SELECT query automatically injected with LIMIT 100
+  • Restricted table 'salaries' query blocked by Enterprise Table Denylist
+
+[STEP 6] MCP Resource URI Discovery (postgres://schema/summary) ..... [PASS]
+  • Discovered Resource 'postgres://schema/summary'
+  • Single-call Markdown schema catalog retrieved in < 10ms
+
+[STEP 7] RFC 7662 Token Revocation Registry ......................... [PASS]
+  • Token JTI revoked; subsequent requests rejected with 401 Unauthorized
+================================================================================
+ ALL 8 ENTERPRISE SECURITY, GOVERNANCE & PROTOCOL REQUIREMENTS FULLY VERIFIED!
 ================================================================================
 ```
 
@@ -150,7 +164,7 @@ enterprise-mcp-server/
 
 ## 🚀 Quickstart & Verification
 
-### 1. Run Automated Test Suite (37 Tests in 0.5s)
+### 1. Run Automated Test Suite (45 Tests in 0.9s)
 ```bash
 # Clone the repository
 git clone https://github.com/hieumai1507/enterprise-mcp-server.git

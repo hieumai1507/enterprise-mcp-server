@@ -96,3 +96,81 @@ async def test_mcp_jsonrpc_tools_list_and_call(token_factory):
         assert call_data["id"] == 3
         assert "result" in call_data
         assert call_data["result"]["isError"] is False
+
+
+@pytest.mark.asyncio
+async def test_mcp_jsonrpc_resources_list_and_read(token_factory):
+    """
+    Validates MCP Resources specification (2024-11-05):
+    - resources/list discovers 'postgres://schema/summary'
+    - resources/read returns Markdown database schema
+    """
+    token = token_factory(
+        scopes="mcp:tools:read mcp:tools:schema",
+        roles=["mcp_analyst_readonly", "mcp_viewer"]
+    )
+    transport = ASGITransport(app=app)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Test resources/list
+        list_req = {
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "resources/list",
+            "params": {}
+        }
+        resp = await client.post("/messages", json=list_req, headers=headers)
+        assert resp.status_code == 200
+        res_data = resp.json()["result"]["resources"]
+        assert len(res_data) >= 1
+        assert res_data[0]["uri"] == "postgres://schema/summary"
+
+        # 2. Test resources/read
+        read_req = {
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "resources/read",
+            "params": {"uri": "postgres://schema/summary"}
+        }
+        read_resp = await client.post("/messages", json=read_req, headers=headers)
+        assert read_resp.status_code == 200
+        contents = read_resp.json()["result"]["contents"]
+        assert len(contents) == 1
+        assert contents[0]["uri"] == "postgres://schema/summary"
+        assert "# PostgreSQL Database Schema Summary" in contents[0]["text"]
+        assert "users" in contents[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_token_revocation_endpoint_blocks_future_requests(token_factory):
+    """
+    Validates RFC 7009 / RFC 7662 token revocation:
+    Revoking a token JTI immediately rejects subsequent requests with 401 Unauthorized.
+    """
+    target_jti = "revoked-agent-uuid-999"
+    token = token_factory(
+        sub="compromised-agent",
+        scopes="mcp:tools:read",
+        roles=["mcp_analyst_readonly"]
+    )
+    # Forge token with target_jti
+    import time
+    import jwt
+    from src.core.config import settings
+    from tests.conftest import rsa_keypair
+    # We can invoke /auth/revoke with explicit jti
+    transport = ASGITransport(app=app)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Revoke the token using its raw token string
+        revoke_resp = await client.post("/auth/revoke", json={"token": token})
+        assert revoke_resp.status_code == 200
+        assert revoke_resp.json()["status"] == "revoked"
+
+        # Attempt to access protected endpoint with the revoked token
+        blocked_resp = await client.get("/tools", headers=headers)
+        assert blocked_resp.status_code == 401
+        assert "revoked" in blocked_resp.json()["detail"].lower()
+

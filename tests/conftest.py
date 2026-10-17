@@ -36,15 +36,18 @@ def public_pem(rsa_keypair):
 
 @pytest.fixture(autouse=True)
 def setup_test_security(rsa_keypair):
-    """Registers test public key with the security manager for all tests."""
+    """Registers test public key with the security manager for all tests and resets revocations."""
     _, public_key = rsa_keypair
     oauth2_manager.register_test_key("test-key-id", public_key)
+    oauth2_manager.revoked_jtis.clear()
     yield
+    oauth2_manager.revoked_jtis.clear()
 
 
 @pytest.fixture
 def token_factory(rsa_keypair):
     """Factory helper to forge valid or adversarial JWT tokens for testing."""
+    import uuid
     private_key, _ = rsa_keypair
 
     def _create_token(
@@ -55,9 +58,11 @@ def token_factory(rsa_keypair):
         issuer: str = settings.OIDC_ISSUER,
         audience: str = settings.OIDC_AUDIENCE,
         kid: str = "test-key-id",
-        expires_in: int = 3600
+        expires_in: int = 3600,
+        jti: str | None = None
     ) -> str:
         roles = roles if roles is not None else ["mcp_analyst_readonly", "mcp_viewer", "mcp_operator_write"]
+        token_jti = jti or str(uuid.uuid4())
         payload = {
             "sub": sub,
             "client_id": client_id,
@@ -67,7 +72,7 @@ def token_factory(rsa_keypair):
             "aud": audience,
             "exp": int(time.time()) + expires_in,
             "iat": int(time.time()),
-            "jti": "test-jwt-uuid"
+            "jti": token_jti
         }
         headers = {"kid": kid, "alg": "RS256"}
         return jwt.encode(payload, private_key, algorithm="RS256", headers=headers)

@@ -80,10 +80,23 @@ class OAuth21SecurityManager:
     def __init__(self):
         self.jwks_cache = TTLCache(maxsize=16, ttl=settings.OIDC_JWKS_CACHE_TTL_SECONDS)
         self.test_public_keys: dict[str, Any] = {}
+        self.revoked_jtis: set[str] = set()
 
     def register_test_key(self, kid: str, public_key: Any) -> None:
         """Allows registration of mock/test public keys for offline testing."""
         self.test_public_keys[kid] = public_key
+
+    def revoke_token(self, jti: str) -> None:
+        """Revokes a token identifier (JTI), immediately blocking subsequent requests (RFC 7662)."""
+        if jti:
+            self.revoked_jtis.add(jti)
+            logger.info("Security Event: Token JTI revoked", jti=jti)
+
+    def is_revoked(self, jti: str | None) -> bool:
+        """Checks if a JTI has been revoked."""
+        if not jti:
+            return False
+        return jti in self.revoked_jtis
 
     async def get_jwks(self) -> dict[str, Any]:
         """Retrieves and caches JWKS keys from OIDC Issuer."""
@@ -139,6 +152,11 @@ class OAuth21SecurityManager:
                 issuer=settings.OIDC_ISSUER,
                 options={"verify_exp": True, "verify_aud": True, "verify_iss": True}
             )
+
+            # Check for token revocation (RFC 7662)
+            jti = payload.get("jti")
+            if jti and self.is_revoked(jti):
+                raise AuthenticationError(f"Token with JTI '{jti}' has been revoked")
 
             context = SecurityContext.from_claims(payload, raw_token=token_str)
             return context

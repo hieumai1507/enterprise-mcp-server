@@ -56,6 +56,19 @@ class Settings(BaseSettings):
     DB_POOL_MIN_SIZE: int = Field(default=2, description="Minimum pool connections per tier")
     DB_POOL_MAX_SIZE: int = Field(default=10, description="Maximum pool connections per tier")
     DB_POOL_TIMEOUT_SECONDS: float = Field(default=10.0, description="Command execution timeout in seconds")
+    DB_STATEMENT_TIMEOUT_MS: int = Field(default=3000, description="PostgreSQL statement_timeout in milliseconds (DoS cutoff)")
+
+    # Query Governor & Table Access Control
+    QUERY_DEFAULT_LIMIT: int = Field(default=100, description="Default LIMIT injected if missing in SELECT queries")
+    QUERY_MAX_ROWS: int = Field(default=1000, description="Maximum allowed rows in memory to prevent OOM")
+    ALLOWED_TABLES: list[str] = Field(
+        default=["users", "orders", "products", "departments"],
+        description="Explicit table allowlist for agent read queries"
+    )
+    DENIED_TABLES: list[str] = Field(
+        default=["salaries", "credentials", "api_keys", "system_secrets", "pg_authid", "pg_shadow"],
+        description="Prohibited tables blocked regardless of queries"
+    )
 
     # AI Guardrail: TypeSafe AI JEV Model Configuration
     JEV_MODEL_ENDPOINT: str | None = Field(
@@ -75,7 +88,11 @@ class Settings(BaseSettings):
         description="Flag to toggle real-time JEV intent guardrail evaluation"
     )
 
-    # Audit Queue Buffer Size
+    # Durable Write-Ahead Log (WAL) Audit Storage
+    AUDIT_WAL_PATH: str = Field(
+        default="audit_wal.db",
+        description="Path to SQLite durable Write-Ahead Log (WAL) on disk"
+    )
     AUDIT_QUEUE_SIZE: int = Field(
         default=10000,
         description="Maximum capacity of in-memory async audit queue"

@@ -28,3 +28,9 @@ reports/
 *.swo
 .DS_Store
 Thumbs.db
+
+# SQLite WAL and local persistence
+*.db
+*.db-wal
+*.db-shm
+

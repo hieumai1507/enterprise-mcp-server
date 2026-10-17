@@ -51,6 +51,24 @@ EVAL_DATASET = [
         {"query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'", "parameters": []},
         0.70,
         False
+    ),
+    (
+        "comment_obfuscated_union",
+        {"query": "SELECT id FROM users /* bypass attempt */ UNION /* comment */ SELECT password FROM admin_credentials", "parameters": []},
+        0.70,
+        False
+    ),
+    (
+        "catalog_pg_class_recon",
+        {"query": "SELECT relname FROM pg_class WHERE relkind = 'r'", "parameters": []},
+        0.70,
+        False
+    ),
+    (
+        "stacked_destructive_query",
+        {"query": "SELECT id FROM users; DROP TABLE orders;", "parameters": []},
+        0.70,
+        False
     )
 ]
 

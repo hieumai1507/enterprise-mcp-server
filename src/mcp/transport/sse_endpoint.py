@@ -119,7 +119,8 @@ async def mcp_post_message(
         response_payload["result"] = {
             "protocolVersion": "2024-11-05",
             "capabilities": {
-                "tools": {"listChanged": False}
+                "tools": {"listChanged": False},
+                "resources": {"subscribe": False, "listChanged": False}
             },
             "serverInfo": {
                 "name": "enterprise-postgresql-mcp-server",
@@ -149,6 +150,27 @@ async def mcp_post_message(
             }
         else:
             response_payload["result"] = execution_res
+
+    elif method == "resources/list":
+        resources = mcp_server.list_resources(context)
+        response_payload["result"] = {"resources": resources}
+
+    elif method == "resources/read":
+        uri = body.params.get("uri") if body.params else None
+        if not uri:
+            response_payload["error"] = {
+                "code": -32602,
+                "message": "Invalid params: 'uri' is required for resources/read"
+            }
+        else:
+            try:
+                res = await mcp_server.read_resource(uri, context)
+                response_payload["result"] = {"contents": [res]}
+            except Exception as ex:
+                response_payload["error"] = {
+                    "code": -32000,
+                    "message": str(ex)
+                }
 
     elif method == "ping":
         response_payload["result"] = {}
@@ -191,3 +213,49 @@ async def call_tool_rest(
         status_code = 403 if result.get("errorCode") in ("FORBIDDEN", "GUARDRAIL_BLOCKED") else 400
         raise HTTPException(status_code=status_code, detail=result)
     return result
+
+
+@router.get("/resources")
+async def list_resources_rest(context: SecurityContext = Depends(get_current_security_context)):
+    """Direct REST endpoint returning accessible MCP resources."""
+    return {"resources": mcp_server.list_resources(context)}
+
+
+@router.get("/resources/read")
+async def read_resource_rest(
+    uri: str = Query(..., description="Resource URI (e.g., postgres://schema/summary)"),
+    context: SecurityContext = Depends(get_current_security_context)
+):
+    """Direct REST endpoint to read an MCP resource."""
+    try:
+        return await mcp_server.read_resource(uri, context)
+    except Exception as ex:
+        raise HTTPException(status_code=400, detail=str(ex))
+
+
+class RevokeTokenRequest(BaseModel):
+    token: str | None = Field(default=None, description="Raw JWT Bearer token to revoke")
+    jti: str | None = Field(default=None, description="Explicit JTI identifier to revoke")
+
+
+@router.post("/auth/revoke")
+async def revoke_token_endpoint(body: RevokeTokenRequest):
+    """
+    RFC 7009 / RFC 7662 Token Revocation Endpoint.
+    Accepts explicit 'jti' or extracts 'jti' from token payload.
+    """
+    import jwt
+    jti_to_revoke = body.jti
+    if not jti_to_revoke and body.token:
+        try:
+            unverified = jwt.decode(body.token, options={"verify_signature": False})
+            jti_to_revoke = unverified.get("jti")
+        except Exception:
+            pass
+
+    if not jti_to_revoke:
+        raise HTTPException(status_code=400, detail="Missing 'jti' or valid JWT token to revoke")
+
+    oauth2_manager.revoke_token(jti_to_revoke)
+    return {"status": "revoked", "jti": jti_to_revoke}
+

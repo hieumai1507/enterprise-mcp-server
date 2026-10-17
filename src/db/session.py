@@ -81,6 +81,11 @@ class PG8000PoolAdapter:
             if self.is_read_only:
                 cur = conn.cursor()
                 cur.execute("SET default_transaction_read_only = 'on'")
+                cur.execute(f"SET statement_timeout = '{settings.DB_STATEMENT_TIMEOUT_MS}ms'")
+                cur.close()
+            else:
+                cur = conn.cursor()
+                cur.execute(f"SET statement_timeout = '{settings.DB_STATEMENT_TIMEOUT_MS}ms'")
                 cur.close()
             return conn
 
@@ -129,7 +134,10 @@ class DatabaseManager:
                     min_size=settings.DB_POOL_MIN_SIZE,
                     max_size=settings.DB_POOL_MAX_SIZE,
                     command_timeout=settings.DB_POOL_TIMEOUT_SECONDS,
-                    server_settings={"default_transaction_read_only": "on"}
+                    server_settings={
+                        "default_transaction_read_only": "on",
+                        "statement_timeout": f"{settings.DB_STATEMENT_TIMEOUT_MS}ms"
+                    }
                 )
 
                 # 2. Read-Write Pool (DML operations)
@@ -141,7 +149,10 @@ class DatabaseManager:
                     password=settings.DB_PASSWORD_RW,
                     min_size=settings.DB_POOL_MIN_SIZE,
                     max_size=settings.DB_POOL_MAX_SIZE,
-                    command_timeout=settings.DB_POOL_TIMEOUT_SECONDS
+                    command_timeout=settings.DB_POOL_TIMEOUT_SECONDS,
+                    server_settings={
+                        "statement_timeout": f"{settings.DB_STATEMENT_TIMEOUT_MS}ms"
+                    }
                 )
 
                 # 3. Audit Pool (Append-only audit writer)

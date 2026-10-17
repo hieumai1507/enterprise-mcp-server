@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from src.core.rbac import require_permissions
 from src.core.security import SecurityContext
-from src.db.query_builder import validate_read_only_sql
+from src.db.query_builder import enforce_query_governor, validate_read_only_sql
 from src.db.session import db_manager
 from src.mcp.tools.registry import tool_registry
 
@@ -43,16 +43,19 @@ async def execute_read_query(payload: dict[str, Any], security_context: Security
     # 1. Pydantic parameter validation
     params = ReadQueryInput(**payload) if not isinstance(payload, ReadQueryInput) else payload
 
-    # 2. SQL AST Sanity Check (SELECT only, no multi-statements, no admin functions)
+    # 2. SQL AST Sanity Check & Table Access Control
     validate_read_only_sql(params.query)
 
-    # 3. Execution against read-only pool (with transaction read only enabled)
+    # 3. Apply Query Governor (enforce LIMIT 100 to prevent unbounded memory consumption)
+    governed_query = enforce_query_governor(params.query)
+
+    # 4. Execution against read-only pool (with transaction read only enabled)
     if not db_manager.ro_pool:
         # Development / Unit Test simulated response
-        return [{"status": "success", "rows_mocked": 1, "query_echo": params.query}]
+        return [{"status": "success", "rows_mocked": 1, "query_echo": governed_query}]
 
     async with db_manager.ro_pool.acquire() as conn:
-        records = await conn.fetch(params.query, *params.parameters)
+        records = await conn.fetch(governed_query, *params.parameters)
         return [dict(rec) for rec in records]
 
 

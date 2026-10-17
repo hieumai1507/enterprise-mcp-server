@@ -52,3 +52,8 @@ class DatabaseSecurityError(SecurityException):
 
 class AuditLoggingError(EnterpriseMCPException):
     """Raised when audit log subsystem fails under fail-closed security mode."""
+
+
+class ResourceNotFoundError(EnterpriseMCPException):
+    """Raised when an MCP resource URI does not exist."""
+

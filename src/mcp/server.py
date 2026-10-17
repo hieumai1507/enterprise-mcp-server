@@ -19,6 +19,7 @@ from src.core.exceptions import (
     DatabaseSecurityError,
     GuardrailViolationError,
     InsufficientPermissionsError,
+    ResourceNotFoundError,
 )
 from src.core.rbac import evaluate_rbac
 from src.core.security import SecurityContext
@@ -48,6 +49,96 @@ class MCPServerEngine:
                 t_dict["is_authorized"] = has_scope and has_role
                 accessible_tools.append(t_dict)
         return accessible_tools
+
+    def list_resources(self, context: SecurityContext) -> list[dict[str, Any]]:
+        """
+        Returns MCP resources accessible to the caller.
+        Requires 'mcp:tools:read' or 'mcp:tools:schema' scope.
+        """
+        has_access = "mcp:tools:read" in context.scopes or "mcp:tools:schema" in context.scopes
+        if not has_access:
+            return []
+        return [
+            {
+                "uri": "postgres://schema/summary",
+                "name": "Database Schema Summary",
+                "description": "Comprehensive Markdown database schema overview for LLM context injection without multiple tool roundtrips",
+                "mimeType": "text/markdown"
+            }
+        ]
+
+    async def read_resource(self, uri: str, context: SecurityContext) -> dict[str, Any]:
+        """
+        Reads a specific MCP resource by URI.
+        Requires 'mcp:tools:read' or 'mcp:tools:schema' scope.
+        """
+        has_access = "mcp:tools:read" in context.scopes or "mcp:tools:schema" in context.scopes
+        if not has_access:
+            raise InsufficientPermissionsError("Missing required scope to access database resources ('mcp:tools:read' or 'mcp:tools:schema')")
+
+        if uri == "postgres://schema/summary":
+            text = await self._generate_schema_summary()
+            return {
+                "uri": uri,
+                "mimeType": "text/markdown",
+                "text": text
+            }
+        raise ResourceNotFoundError(f"MCP Resource URI '{uri}' not found")
+
+    async def _generate_schema_summary(self) -> str:
+        """
+        Queries PostgreSQL catalog for public table columns or generates structured fallback schema.
+        """
+        from src.core.config import settings
+        from src.db.session import db_manager
+
+        if db_manager.ro_pool:
+            try:
+                sql = """
+                    SELECT table_name, column_name, data_type, is_nullable
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                    ORDER BY table_name, ordinal_position;
+                """
+                async with db_manager.ro_pool.acquire() as conn:
+                    rows = await conn.fetch(sql)
+
+                if rows:
+                    tables: dict[str, list[dict[str, Any]]] = {}
+                    for row in rows:
+                        t_name = row["table_name"]
+                        if t_name in settings.DENIED_TABLES:
+                            continue
+                        tables.setdefault(t_name, []).append(row)
+
+                    lines = ["# PostgreSQL Database Schema Summary\n"]
+                    for t_name, cols in sorted(tables.items()):
+                        lines.append(f"### Table: `{t_name}`")
+                        for c in cols:
+                            nullable = "NULL" if c["is_nullable"] == "YES" else "NOT NULL"
+                            lines.append(f"- `{c['column_name']}`: {c['data_type']} ({nullable})")
+                        lines.append("")
+                    return "\n".join(lines)
+            except Exception as e:
+                logger.warning("Could not query live schema from catalog, returning offline schema", error=str(e))
+
+        # Static offline fallback schema representation
+        return (
+            "# PostgreSQL Database Schema Summary (Offline / Fallback)\n\n"
+            "### Table: `users`\n"
+            "- `id`: integer (PRIMARY KEY, NOT NULL)\n"
+            "- `full_name`: varchar(100) (NOT NULL)\n"
+            "- `email`: varchar(255) (UNIQUE, NOT NULL)\n"
+            "- `department`: varchar(50) (NULL)\n"
+            "- `created_at`: timestamptz (NOT NULL)\n\n"
+            "### Table: `orders`\n"
+            "- `id`: integer (PRIMARY KEY, NOT NULL)\n"
+            "- `user_id`: integer (FOREIGN KEY -> users.id, NOT NULL)\n"
+            "- `product_name`: varchar(150) (NOT NULL)\n"
+            "- `amount`: numeric(10,2) (NOT NULL)\n"
+            "- `status`: varchar(50) (NOT NULL)\n"
+            "- `created_at`: timestamptz (NOT NULL)\n"
+        )
 
     async def execute_tool(
         self,
