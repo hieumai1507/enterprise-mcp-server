@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "enterprise-postgresql": {
+      "url": "https://mcp.internal.enterprise.com/sse",
+      "transport": "sse",
+      "headers": {
+        "Authorization": "Bearer <ENTERPRISE_OAUTH2_ACCESS_TOKEN>"
+      }
+    }
+  }
+}
