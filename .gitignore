@@ -34,3 +34,5 @@ Thumbs.db
 *.db-wal
 *.db-shm
 
+# Profile templates
+GITHUB_PROFILE_README.md
