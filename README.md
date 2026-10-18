@@ -3,7 +3,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![MCP](https://img.shields.io/badge/MCP-1.0-blueviolet.svg)](https://modelcontextprotocol.io/)
-[![M8ven Score](https://m8ven.ai/badge/mcp/hieumai1507/enterprise-mcp-server)](https://m8ven.ai/mcp/hieumai1507/enterprise-mcp-server?s=readme)
+[![M8ven Verified](https://m8ven.ai/badge/mcp/hieumai1507/enterprise-mcp-server?variant=verified)](https://m8ven.ai/mcp/hieumai1507/enterprise-mcp-server?s=readme)
 [![Security: OAuth 2.1](https://img.shields.io/badge/OAuth-2.1%20with%20PKCE-brightgreen.svg)](https://oauth.net/2.1/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%7C%2017-336791.svg)](https://www.postgresql.org/)
 [![Tests: 45 Passed](https://img.shields.io/badge/Tests-45%2F45%20Passed-success.svg)](./tests)
